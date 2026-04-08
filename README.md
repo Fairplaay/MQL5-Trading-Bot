@@ -186,8 +186,8 @@ Este código es con fines educativos. No garantiza ganancias. Opera bajo tu prop
 | `DailyDrawdownLimit` | 5.0 | % máximo de pérdida diaria permitida |
 | `MagicNumber` | 2026 | Identificador único del EA (para distinguir trades) |
 | `BaseSymbolParam` | "" | Símbolo a tradear (vacío = usa el del chart) |
-| `MainTF` | PERIOD_M1 | Timeframe principal para entradas |
-| `HigherTF` | PERIOD_M5 | Timeframe superior para contexto |
+| `MainTF` | PERIOD_M1 | Timeframe principal (M1 para scalping) |
+| `HigherTF_Override` | "" | Timeframe superior (vacío = mismo que MainTF, sin multi-timeframe) |
 
 ### Filtros
 | Parámetro | Default | Descripción |

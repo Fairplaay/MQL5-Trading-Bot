@@ -39,7 +39,7 @@ input double   DailyDrawdownLimit = 5.0;         // Límite pérdida diaria (%)
 input int      MagicNumber        = 2026;        // Magic Number
 input string   BaseSymbolParam    = "";          // Símbolo (vacío = usar chart)
 input ENUM_TIMEFRAMES MainTF      = PERIOD_M1;   // Timeframe principal
-input ENUM_TIMEFRAMES HigherTF    = PERIOD_M5;   // Timeframe superior
+input string   HigherTF_Override = "";         // Timeframe superior (vacío = mismo que MainTF)
 
 input bool     UseSpreadFilter    = true;
 input int      MaxSpreadPoints    = 50;          // Spread máximo para oro
