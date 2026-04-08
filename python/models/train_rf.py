@@ -166,7 +166,7 @@ def load_m1_data(csv_file: str) -> pd.DataFrame:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Entrena RandomForest para M1")
-    parser.add_argument("--input", type=str, default="xauusd_m1.csv", help="CSV input")
+    parser.add_argument("--input", type=str, default="xauusd.csv", help="CSV input")
     parser.add_argument("--version", type=int, default=3, help="Version del modelo")
     parser.add_argument("--trees", type=int, default=100, help="Número de árboles")
     
