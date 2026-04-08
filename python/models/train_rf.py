@@ -150,7 +150,7 @@ def train_rf(input_csv: str, version: int = 1, n_estimators: int = 100):
 
 def load_m1_data(csv_file: str) -> pd.DataFrame:
     """Carga data M1 del CSV exportado."""
-    df = pd.read_csv(csv_file)
+    df = pd.read_csv(csv_file, encoding="utf-16", encoding_errors="ignore")
     
     required = ["DATE", "TIME", "OPEN", "HIGH", "LOW", "CLOSE", "TICKVOL"]
     for col in required:
