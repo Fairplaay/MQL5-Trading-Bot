@@ -377,8 +377,8 @@ void ResetDailyLossIfNewDay()
 
 bool CheckDailyDrawdown(double limit, double currentLoss)
 {
-   double equity = AccountInfoDouble(EQUITY);
-   double balance = AccountInfoDouble(BALANCE);
+   double equity = AccountInfoDouble(ACCOUNT_EQUITY);
+   double balance = AccountInfoDouble(ACCOUNT_BALANCE);
    
    if(balance <= 0) return false;
    
@@ -389,31 +389,10 @@ bool CheckDailyDrawdown(double limit, double currentLoss)
 
 void UpdateCurrentDailyLoss()
 {
-   datetime dayStart = iTime(baseSymbolUsed, PERIOD_D1, 0);
-   
-   if(!HistorySelect(dayStart, TimeCurrent()))
-     {
-      Print("HistorySelect failed");
-      return;
-     }
-   
-   double dailyProfit = 0;
-   uint total = HistoryDealsTotal();
-   
-   for(uint i = 0; i < total; i++)
-     {
-      ulong ticket = HistoryDealGetTicket(i);
-      if(ticket > 0)
-        {
-         string sym = HistoryDealGetString(DEAL_SYMBOL);
-         if(sym == baseSymbolUsed && HistoryDealGetInteger(DEAL_MAGIC) == MagicNumber)
-           {
-            dailyProfit += HistoryDealGetDouble(DEAL_PROFIT);
-           }
-        }
-     }
-   
-   CurrentDailyLoss = dailyProfit;
+   // Calcular pérdida diaria basada en equity vs balance
+   double equity = AccountInfoDouble(ACCOUNT_EQUITY);
+   double balance = AccountInfoDouble(ACCOUNT_BALANCE);
+   CurrentDailyLoss = balance - equity;
 }
 
 //==================================================================
