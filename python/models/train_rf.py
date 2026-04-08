@@ -89,7 +89,7 @@ def train_rf(input_csv: str, version: int = 1, n_estimators: int = 100):
             input_csv = os.path.join(mt5_path, os.path.basename(input_csv))
             print(f"Usando ruta MT5: {input_csv}")
         else:
-            input_csv = os.path.join(os.path.dirname(__file__), "..", input_csv)
+            input_csv = os.path.join(os.path.dirname(__file__), "..", "..", input_csv)
     
     print(f"Cargando data desde: {input_csv}")
     df = load_m1_data(input_csv)
