@@ -158,7 +158,7 @@ def load_m1_data(csv_file: str) -> pd.DataFrame:
             raise ValueError(f"Falta columna: {col}")
     
     # Crear Time
-    df["Time"] = pd.to_datetime(df["DATE"] + " " + df["TIME"], format="%Y.%m.%d %H:%M:%S")
+    df["Time"] = pd.to_datetime(df["Time"], format="%Y.%m.%d %H:%M:%S")
     df.sort_values("Time", inplace=True)
     df.reset_index(drop=True, inplace=True)
     
