@@ -1,6 +1,6 @@
 """
 train_m1.py - Entrena LSTM con data de un solo timeframe (M1)
-Uso: python train_m1.py --symbol XAUUSD --bars 2000
+Uso: python train_m1.py --input xauusd_m1.csv --version 3
 """
 
 import argparse
@@ -15,41 +15,24 @@ from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from sklearn.preprocessing import StandardScaler
 import joblib
 import sys
+from dotenv import load_dotenv
 
-def load_m1_data(csv_file: str) -> pd.DataFrame:
-    """Carga data M1 del CSV exportado."""
-    df = pd.read_csv(csv_file)
-    
-    required = ["DATE", "TIME", "OPEN", "HIGH", "LOW", "CLOSE", "TICKVOL"]
-    for col in required:
-        if col not in df.columns:
-            raise ValueError(f"Falta columna: {col}")
-    
-    # Crear Time
-    df["Time"] = pd.to_datetime(df["DATE"] + " " + df["TIME"], format="%Y.%m.%d %H:%M:%S")
-    df.sort_values("Time", inplace=True)
-    df.reset_index(drop=True, inplace=True)
-    
-    return df
-
-def prepare_features(df: pd.DataFrame) -> tuple:
-    """Prepara features para el modelo."""
-    # Features: Close, Open, High, Low, Volume
-    features = ["OPEN", "HIGH", "LOW", "CLOSE", "TICKVOL"]
-    X = df[features].values
-    
-    # Target: 1 si la siguiente vela sube, 0 si baja
-    df["Target"] = (df["CLOSE"].shift(-1) > df["CLOSE"]).astype(int)
-    y = df["Target"].values
-    
-    # Eliminar última fila (sin target)
-    X = X[:-1]
-    y = y[:-1]
-    
-    return X, y
+# Cargar .env desde la raíz del repo
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 def train_m1(input_csv: str, version: int = 1, epochs: int = 30, batch_size: int = 32):
     """Entrena modelo LSTM para M1."""
+    
+    # Si es ruta relativa, agregar prefijo desde .env
+    if not os.path.isabs(input_csv):
+        mt5_path = os.environ.get("MT5_FILES_PATH", "")
+        if mt5_path and os.path.exists(mt5_path):
+            input_csv = os.path.join(mt5_path, os.path.basename(input_csv))
+            print(f"Usando ruta MT5: {input_csv}")
+        else:
+            # Buscar en carpeta actual
+            input_csv = os.path.join(os.path.dirname(__file__), "..", input_csv)
+    
     print(f"Cargando data desde: {input_csv}")
     df = load_m1_data(input_csv)
     print(f"Data cargada: {len(df)} velas")
@@ -113,7 +96,7 @@ def train_m1(input_csv: str, version: int = 1, epochs: int = 30, batch_size: int
     print(f"\nTest accuracy: {acc:.4f}")
     
     # Guardar modelo y scaler
-    output_dir = "python/models"
+    output_dir = os.path.join(os.path.dirname(__file__))
     os.makedirs(output_dir, exist_ok=True)
     
     model.save(f"{output_dir}/lstm_model_v{version}.h5")
@@ -122,9 +105,41 @@ def train_m1(input_csv: str, version: int = 1, epochs: int = 30, batch_size: int
     print(f"Modelo guardado: lstm_model_v{version}.h5")
     print(f"Scaler guardado: scaler_v{version}.pkl")
 
+def load_m1_data(csv_file: str) -> pd.DataFrame:
+    """Carga data M1 del CSV exportado."""
+    df = pd.read_csv(csv_file)
+    
+    required = ["DATE", "TIME", "OPEN", "HIGH", "LOW", "CLOSE", "TICKVOL"]
+    for col in required:
+        if col not in df.columns:
+            raise ValueError(f"Falta columna: {col}")
+    
+    # Crear Time
+    df["Time"] = pd.to_datetime(df["DATE"] + " " + df["TIME"], format="%Y.%m.%d %H:%M:%S")
+    df.sort_values("Time", inplace=True)
+    df.reset_index(drop=True, inplace=True)
+    
+    return df
+
+def prepare_features(df: pd.DataFrame) -> tuple:
+    """Prepara features para el modelo."""
+    # Features: Close, Open, High, Low, Volume
+    features = ["OPEN", "HIGH", "LOW", "CLOSE", "TICKVOL"]
+    X = df[features].values
+    
+    # Target: 1 si la siguiente vela sube, 0 si baja
+    df["Target"] = (df["CLOSE"].shift(-1) > df["CLOSE"]).astype(int)
+    y = df["Target"].values
+    
+    # Eliminar última fila (sin target)
+    X = X[:-1]
+    y = y[:-1]
+    
+    return X, y
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Entrena LSTM para M1")
-    parser.add_argument("--input", type=str, default="mt5_export.csv", help="CSV input")
+    parser.add_argument("--input", type=str, default="xauusd_m1.csv", help="CSV input")
     parser.add_argument("--version", type=int, default=3, help="Version del modelo")
     parser.add_argument("--epochs", type=int, default=30, help="Épocas")
     parser.add_argument("--batch", type=int, default=32, help="Batch size")
