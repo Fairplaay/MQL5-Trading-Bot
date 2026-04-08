@@ -52,6 +52,12 @@ input bool     UsePartialExit     = true;
 input double   PartialExitRatio   = 0.5;
 
 //==================================================================
+// INPUTS - ML (LSTM)
+//==================================================================
+input bool     UseMLSignal        = false;       // Usar filtro LSTM
+input double   ML_Threshold       = 0.55;        // Threshold del LSTM (0.0-1.0)
+
+//==================================================================
 // GLOBALES
 //==================================================================
 int hRSI, hADX, hMACD;
@@ -139,6 +145,18 @@ void OnTick()
    
    if(CheckMomentumSignal(buySignal, sellSignal, buySL, buyTP, sellSL, sellTP))
      {
+      // Verificar ML Signal si está habilitado
+      if(UseMLSignal)
+        {
+         double mlProb = ReadMLSignal("signal.csv");
+         Print("ML Probability: ", mlProb);
+         if(mlProb < ML_Threshold)
+           {
+            Print("ML Signal below threshold - trade skipped");
+            return;
+           }
+        }
+      
       // Ejecutar BUY
       if(buySignal)
         {
@@ -446,4 +464,33 @@ void OnDeinit(const int reason)
 {
    ObjectsDeleteAll(0, "M3_");
    Print("Bot detenido");
+}
+
+//==================================================================
+// READ ML SIGNAL (LSTM)
+//==================================================================
+double ReadMLSignal(string filename)
+{
+   string commonPath = "MQL5\\Files\\";
+   string fullPath = commonPath + filename;
+   
+   int handle = FileOpen(fullPath, FILE_READ | FILE_CSV);
+   if(handle == INVALID_HANDLE)
+     {
+      Print("Failed to open ML signal file: ", filename);
+      return 0.0;
+     }
+   
+   double prob = 0.0;
+   while(!FileIsEnding(handle))
+     {
+      string line = FileReadString(handle);
+      if(line != "")
+        {
+         prob = StringToDouble(line);
+        }
+     }
+   
+   FileClose(handle);
+   return prob;
 }

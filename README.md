@@ -205,6 +205,12 @@ Este código es con fines educativos. No garantiza ganancias. Opera bajo tu prop
 | `UsePartialExit` | true | Cerrar parcialmente la posición |
 | `PartialExitRatio` | 0.5 | % de la posición a cerrar (0.5 = 50%) |
 
+### ML (LSTM) - Opcional
+| Parámetro | Default | Descripción |
+|----------|---------|-------------|
+| `UseMLSignal` | false | Usar filtro LSTM (requiere Python) |
+| `ML_Threshold` | 0.55 | Probabilidad mínima para ejecutar (0.0-1.0) |
+
 ## 🧠 Lógica de Señales
 
 ### Señal BUY
