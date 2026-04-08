@@ -59,7 +59,7 @@ def prepare_features(df):
     
     # Features
     features = [
-        'OPEN', 'HIGH', 'LOW', 'CLOSE', 'TICKVOL',
+        'Open', 'High', 'Low', 'Close', 'Volume',
         'RSI', 'EMA_9', 'EMA_21', 'ATR',
         'MACD', 'MACD_Signal', 'BB_Upper', 'BB_Lower'
     ]
@@ -152,7 +152,7 @@ def load_m1_data(csv_file: str) -> pd.DataFrame:
     """Carga data M1 del CSV exportado."""
     df = pd.read_csv(csv_file, encoding="utf-16", encoding_errors="ignore")
     
-    required = ["DATE", "TIME", "OPEN", "HIGH", "LOW", "CLOSE", "TICKVOL"]
+    required = ["Time", "Open", "High", "Low", "Close", "Volume"]
     for col in required:
         if col not in df.columns:
             raise ValueError(f"Falta columna: {col}")
