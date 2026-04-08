@@ -150,9 +150,9 @@ def train_rf(input_csv: str, version: int = 1, n_estimators: int = 100):
 
 def load_m1_data(csv_file: str) -> pd.DataFrame:
     """Carga data M1 del CSV exportado."""
-    df = pd.read_csv(csv_file, encoding="utf-16", sep=";", encoding_errors="ignore")
+    df = pd.read_csv(csv_file, sep=";", encoding="utf-16")
     
-    required = ["Time", "Open", "High", "Low", "Close", "Volume"]
+    print("Columnas disponibles:", df.columns.tolist()); print("Columnas:", df.columns.tolist()); required = ["Time", "Open", "High", "Low", "Close", "Volume"]
     for col in required:
         if col not in df.columns:
             raise ValueError(f"Falta columna: {col}")
