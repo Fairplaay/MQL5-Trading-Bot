@@ -312,38 +312,50 @@ void ManageOpenPositions()
 {
    for(int i = PositionsTotal() - 1; i >= 0; i--)
      {
-      if(PositionSelectByIndex(i))
+      ulong ticket = PositionGetTicket(i);
+      if(!PositionSelectByTicket(ticket)) continue;
+      
+      string sym = PositionGetString(POSITION_SYMBOL);
+      long magic = PositionGetInteger(POSITION_MAGIC);
+      
+      if(sym != baseSymbolUsed || magic != MagicNumber) continue;
+      
+      double profit = PositionGetDouble(POSITION_PROFIT);
+      double openPrice = PositionGetDouble(POSITION_PRICE_OPEN);
+      double sl = PositionGetDouble(POSITION_SL);
+      double tp = PositionGetDouble(POSITION_TP);
+      
+      ENUM_POSITION_TYPE posType = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+      
+      // Trailing Stop
+      if(UseTrailingStop)
         {
-         if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) continue;
-         if(PositionGetString(POSITION_SYMBOL) != baseSymbolUsed) continue;
+         double point = SymbolInfoDouble(baseSymbolUsed, SYMBOL_POINT);
+         double trailDistance = TrailStopPips * point;
          
-         double profit = PositionGetDouble(POSITION_PROFIT);
-         double openPrice = PositionGetDouble(POSITION_PRICE_OPEN);
-         double sl = PositionGetDouble(POSITION_SL);
-         double tp = PositionGetDouble(POSITION_TP);
-         ulong ticket = PositionGetTicket();
-         
-         // Trailing Stop
-         if(UseTrailingStop && profit > TrailStopPips * SymbolInfoDouble(baseSymbolUsed, SYMBOL_POINT) * 10)
+         if(posType == POSITION_TYPE_BUY && profit > trailDistance * 10)
            {
-            double newSL = PositionType() == POSITION_TYPE_BUY ? 
-               openPrice + (TrailStopPips * SymbolInfoDouble(baseSymbolUsed, SYMBOL_POINT)) :
-               openPrice - (TrailStopPips * SymbolInfoDouble(baseSymbolUsed, SYMBOL_POINT));
-            
-            if(PositionType() == POSITION_TYPE_BUY && newSL > sl)
-               trade.PositionModify(ticket, newSL, tp);
-            else if(PositionType() == POSITION_TYPE_SELL && newSL < sl)
+            double newSL = openPrice + trailDistance;
+            if(newSL > sl)
                trade.PositionModify(ticket, newSL, tp);
            }
-         
-         // Partial Exit
-         if(UsePartialExit && profit > 0)
+         else if(posType == POSITION_TYPE_SELL && profit > trailDistance * 10)
            {
-            double volume = PositionGetDouble(POSITION_VOLUME);
-            if(volume > minLot * 2)
-              {
-               trade.PositionClosePartial(ticket, volume * PartialExitRatio);
-              }
+            double newSL = openPrice - trailDistance;
+            if(newSL < sl || sl == 0)
+               trade.PositionModify(ticket, newSL, tp);
+           }
+        }
+      
+      // Partial Exit
+      if(UsePartialExit && profit > 0)
+        {
+         double volume = PositionGetDouble(POSITION_VOLUME);
+         double minLot = SymbolInfoDouble(baseSymbolUsed, SYMBOL_VOLUME_MIN);
+         
+         if(volume > minLot * 2)
+           {
+            trade.PositionClosePartial(ticket, volume * PartialExitRatio);
            }
         }
      }
