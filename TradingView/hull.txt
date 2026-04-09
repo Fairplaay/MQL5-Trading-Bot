@@ -1,0 +1,136 @@
+//@version=4
+study(title="UT BOT ALERT + HULL SUITE + DEMA + TEMA", overlay=true)
+
+// ======= UT Bot Alerts Section =======
+a = input(1,     title = "Key Value (Sensitivity)")
+c = input(10,    title = "ATR Period")
+h = input(false, title = "Signals from Heikin Ashi Candles")
+
+xATR  = atr(c)
+nLoss = a * xATR
+
+src_ut = h ? security(heikinashi(syminfo.tickerid), timeframe.period, close, lookahead = false) : close
+
+xATRTrailingStop = 0.0
+xATRTrailingStop := iff(src_ut > nz(xATRTrailingStop[1], 0) and src_ut[1] > nz(xATRTrailingStop[1], 0), max(nz(xATRTrailingStop[1]), src_ut - nLoss),
+   iff(src_ut < nz(xATRTrailingStop[1], 0) and src_ut[1] < nz(xATRTrailingStop[1], 0), min(nz(xATRTrailingStop[1]), src_ut + nLoss), 
+   iff(src_ut > nz(xATRTrailingStop[1], 0), src_ut - nLoss, src_ut + nLoss)))
+
+pos = 0   
+pos :=   iff(src_ut[1] < nz(xATRTrailingStop[1], 0) and src_ut > nz(xATRTrailingStop[1], 0), 1,
+   iff(src_ut[1] > nz(xATRTrailingStop[1], 0) and src_ut < nz(xATRTrailingStop[1], 0), -1, nz(pos[1], 0))) 
+
+xcolor = pos == -1 ? color.red: pos == 1 ? color.green : color.blue 
+
+ema_ut   = ema(src_ut,1)
+above = crossover(ema_ut, xATRTrailingStop)
+below = crossover(xATRTrailingStop, ema_ut)
+
+buy_ut  = src_ut > xATRTrailingStop and above 
+sell_ut = src_ut < xATRTrailingStop and below
+
+plotshape(buy_ut,  title = "UT Buy",  text = 'UT Buy',  style = shape.labelup,   location = location.belowbar, color= color.green, textcolor = color.white, transp = 0, size = size.tiny)
+plotshape(sell_ut, title = "UT Sell", text = 'UT Sell', style = shape.labeldown, location = location.abovebar, color= color.red,   textcolor = color.white, transp = 0, size = size.tiny)
+
+// ======= Hull Suite Section =======
+src_hull = input(close, title="Source")
+modeSwitch = input("Hma", title="Hull Variation", options=["Hma", "Thma", "Ehma"])
+length = input(55, title="Length(180-200 for floating S/R , 55 for swing entry)")
+lengthMult = input(1.0, title="Length multiplier")
+
+useHtf = input(false, title="Show Hull MA from X timeframe?")
+htf = input("240", title="Higher timeframe", type=input.resolution)
+
+switchColor = input(true, "Color Hull according to trend?")
+candleCol = input(false,title="Color candles based on Hull's Trend?")
+visualSwitch  = input(true, title="Show as a Band?")
+thicknesSwitch = input(1, title="Line Thickness")
+transpSwitch = input(40, title="Band Transparency",step=5)
+
+// FUNCTIONS
+HMA(_src, _length) =>  wma(2 * wma(_src, _length / 2) - wma(_src, _length), round(sqrt(_length)))
+EHMA(_src, _length) =>  ema(2 * ema(_src, _length / 2) - ema(_src, _length), round(sqrt(_length)))
+THMA(_src, _length) =>  wma(wma(_src,_length / 3) * 3 - wma(_src, _length / 2) - wma(_src, _length), _length)
+
+Mode(modeSwitch, src, len) =>
+      modeSwitch == "Hma"  ? HMA(src, len) :
+      modeSwitch == "Ehma" ? EHMA(src, len) : 
+      modeSwitch == "Thma" ? THMA(src, len/2) : na
+
+_hull = Mode(modeSwitch, src_hull, int(length * lengthMult))
+HULL = useHtf ? security(syminfo.ticker, htf, _hull) : _hull
+MHULL = HULL[0]
+SHULL = HULL[2]
+
+hullColor = switchColor ? (HULL > HULL[2] ? #00ff00 : #ff0000) : #ff9800
+
+Fi1 = plot(MHULL, title="MHULL", color=hullColor, linewidth=thicknesSwitch, transp=50)
+Fi2 = plot(visualSwitch ? SHULL : na, title="SHULL", color=hullColor, linewidth=thicknesSwitch, transp=50)
+fill(Fi1, Fi2, title="Band Filler", color=hullColor, transp=transpSwitch)
+
+// ======= DEMA Section =======
+dema_length = input(21, title="DEMA Length")
+demaLine = 2 * ema(close, dema_length) - ema(ema(close, dema_length), dema_length)
+plot(demaLine, title="DEMA", color=color.orange, linewidth=2)
+
+// ======= TEMA Section =======
+temaLength1 = input(21, title="TEMA Length 1")
+temaLength2 = input(50, title="TEMA Length 2")
+
+ema1_1 = ema(close, temaLength1)
+ema2_1 = ema(ema1_1, temaLength1)
+ema3_1 = ema(ema2_1, temaLength1)
+tema1 = 3 * (ema1_1 - ema2_1) + ema3_1
+
+ema1_2 = ema(close, temaLength2)
+ema2_2 = ema(ema1_2, temaLength2)
+ema3_2 = ema(ema2_2, temaLength2)
+tema2 = 3 * (ema1_2 - ema2_2) + ema3_2
+
+plot(tema1, title="TEMA 1", color=color.aqua, linewidth=2)
+plot(tema2, title="TEMA 2", color=color.fuchsia, linewidth=2)
+
+// ======= Combined Alerts =======
+alertcondition(buy_ut,  "UT Long",  "UT Long")
+alertcondition(sell_ut, "UT Short", "UT Short")
+
+alertcondition(crossover(MHULL, SHULL), title="Hull trending up", message="Hull trending up")
+alertcondition(crossover(SHULL, MHULL), title="Hull trending down", message="Hull trending down")
+
+// Nueva condición combinada: UT + Hull + DEMA
+buy_combined = buy_ut and (HULL > HULL[2]) and (demaLine > demaLine[1])
+sell_combined = sell_ut and (HULL < HULL[2]) and (demaLine < demaLine[1])
+
+plotshape(buy_combined, title="Combined Buy", text="Comb Buy", style=shape.triangleup, location=location.belowbar, color=color.lime, size=size.small)
+plotshape(sell_combined, title="Combined Sell", text="Comb Sell", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small)
+
+alertcondition(buy_combined, "Combined Buy Signal", "Combined Buy Signal - UT, Hull, and DEMA agree")
+alertcondition(sell_combined, "Combined Sell Signal", "Combined Sell Signal - UT, Hull, and DEMA agree")
+
+// ======= Señales TEMA + Confirmación UT Bot + Hull =======
+// Cruces de TEMA
+tema_cross_up = crossover(tema1, tema2)
+tema_cross_down = crossunder(tema1, tema2)
+
+// Condiciones combinadas
+tema_buy_confirmed  = tema_cross_up and buy_ut and (HULL > HULL[2])
+tema_sell_confirmed = tema_cross_down and sell_ut and (HULL < HULL[2])
+
+// Salida cuando la señal se debilita (cruce inverso)
+tema_exit_long  = tema1 < tema2 and nz(tema1[1]) > nz(tema2[1])
+tema_exit_short = tema1 > tema2 and nz(tema1[1]) < nz(tema2[1])
+
+// Plot de señales
+plotshape(tema_buy_confirmed, title="TEMA Buy Signal", location=location.belowbar, color=color.lime, style=shape.labelup, text="TEMA Buy")
+plotshape(tema_sell_confirmed, title="TEMA Sell Signal", location=location.abovebar, color=color.red, style=shape.labeldown, text="TEMA Sell")
+
+plotshape(tema_exit_long, title="Exit Long", location=location.abovebar, color=color.orange, style=shape.cross, text="Exit Long")
+plotshape(tema_exit_short, title="Exit Short", location=location.belowbar, color=color.orange, style=shape.cross, text="Exit Short")
+
+// Alertas
+alertcondition(tema_buy_confirmed, title="Buy Signal (TEMA + UT + Hull)", message="Buy: TEMA cross UP + UT Bot + Hull confirm")
+alertcondition(tema_sell_confirmed, title="Sell Signal (TEMA + UT + Hull)", message="Sell: TEMA cross DOWN + UT Bot + Hull confirm")
+alertcondition(tema_exit_long, title="Exit Long Signal", message="Exit Long: TEMA cross below TEMA2")
+alertcondition(tema_exit_short, title="Exit Short Signal", message="Exit Short: TEMA cross above TEMA2")
+
+

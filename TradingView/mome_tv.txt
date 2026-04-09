@@ -1,0 +1,355 @@
+// 🔱 Momentum X3 · RSI + ADX + MACD
+// ============================================================
+//  RSI + ADX + MACD  ·  Multi-Slot v2  (normalización dinámica)
+//  Cada indicador ocupa su franja y la LLENA de forma dinámica.
+//
+//  Slots (de abajo a arriba):
+//    Slot 1 – MACD  :   0 – 100
+//    Slot 2 – RSI   : 115 – 215
+//    Slot 3 – ADX   : 230 – 330
+// ============================================================
+//@version=5
+indicator("🔱 Momentum X3 · RSI + ADX + MACD", shorttitle="🔱 Momentum X3", overlay=false, max_lines_count=10)
+
+// ── INPUTS ──────────────────────────────────────────────────
+rsi_len    = input.int(14, "RSI · Período",
+     tooltip="Cantidad de velas usadas para calcular el RSI. Menor período = RSI más sensible; mayor período = RSI más suave.",
+     group="RSI")
+rsi_src    = input.source(close, "RSI · Fuente",
+     tooltip="Serie de precio usada por el RSI (normalmente cierre).",
+     group="RSI")
+rsi_color  = input.color(color.new(#E040FB, 0), "RSI · Color",
+     tooltip="Color de la línea RSI y del nombre RSI en la tabla de resumen.",
+     group="RSI")
+
+adx_len    = input.int(14, "ADX · Período DI",
+     tooltip="Ventana base de cálculo para DI+ y DI-.",
+     group="ADX")
+adx_smooth = input.int(14, "ADX · Suavizado",
+     tooltip="Suavizado del ADX (línea amarilla). Más alto = menos ruido, más lento.",
+     group="ADX")
+adx_color  = input.color(color.new(#FFD700, 0), "ADX · Color",
+     tooltip="Color de la línea ADX (fuerza de tendencia) y del nombre ADX en la tabla.",
+     group="ADX")
+
+macd_fast  = input.int(12, "MACD · Rápida",
+     tooltip="EMA rápida del MACD (línea azul). Menor valor = respuesta más rápida.",
+     group="MACD")
+macd_slow  = input.int(26, "MACD · Lenta",
+     tooltip="EMA lenta del MACD. Controla el contexto de fondo del cruce.",
+     group="MACD")
+macd_sig   = input.int(9,  "MACD · Señal",
+     tooltip="EMA de la línea MACD (línea naranja). Se usa para cruces y confirmación.",
+     group="MACD")
+
+// Ventana de normalización dinámica para el MACD
+norm_len   = input.int(100, "MACD · Ventana de normalización (barras)",
+     minval=20, maxval=500,
+     tooltip="Cantidad de velas usadas para escalar MACD/histograma al slot. Más alto = escala más estable; más bajo = más reactiva.",
+     group="MACD")
+
+show_table    = input.bool(true, "Tabla · Mostrar",
+     tooltip="Muestra u oculta la tabla de resumen con RSI, ADX/DI y MACD.",
+     group="Tabla")
+table_pos_txt = input.string("Arriba derecha", "Tabla · Posición",
+     options=["Arriba derecha", "Abajo derecha"],
+     tooltip="Ubicación de la tabla dentro del panel del indicador.",
+     group="Tabla")
+table_bg_color     = input.color(color.new(color.rgb(230, 235, 245), 84), "Tabla · Fondo (alto contraste)",
+     tooltip="Color de fondo de la tabla. Ajusta transparencia para más o menos contraste.",
+     group="Tabla")
+table_border_color = input.color(color.new(color.white, 35), "Tabla · Borde",
+     tooltip="Color del borde interno de celdas.",
+     group="Tabla")
+table_frame_color  = input.color(color.new(color.white, 5), "Tabla · Marco",
+     tooltip="Color del marco exterior de la tabla.",
+     group="Tabla")
+
+table_pos = switch table_pos_txt
+    "Arriba derecha"   => position.top_right
+    => position.bottom_right
+
+// ── SEÑALES DE COMPRA ────────────────────────────────────────
+buy_active        = input.bool(true,   "Activar señales de COMPRA",
+     tooltip="Habilita la detección y marcado de señales de entrada larga.",
+     group="Señales Buy")
+buy_rsi_lookback  = input.int(6,       "RSI · Lookback (velas)",
+     minval=2, maxval=20,
+     tooltip="Cuántas velas hacia atrás buscar si el RSI tocó sobreventa. Un valor mayor captura rebotes más tardíos.",
+     group="Señales Buy")
+buy_rsi_level     = input.float(35,    "RSI · Nivel sobreventa",
+     minval=15, maxval=60,
+     tooltip="El RSI debe haber bajado de este nivel dentro del lookback. Subir el valor hace la condición más fácil de cumplir.",
+     group="Señales Buy")
+buy_adx_slope_len = input.int(3,       "ADX · Pendiente (velas atrás)",
+     minval=1, maxval=50,
+     tooltip="Compara el ADX actual con el de N velas atrás. Si subió, hay fuerza entrando. Mayor valor = pendiente más suave.",
+     group="Señales Buy")
+buy_macd_confirm  = input.int(2,       "MACD · Velas giro confirmación",
+     minval=1, maxval=20,
+     tooltip="Número de velas consecutivas que el histograma del MACD debe subir para confirmar el giro alcista.",
+     group="Señales Buy")
+buy_macd_depth    = input.float(20,    "MACD · Profundidad mínima (%)",
+     minval=5, maxval=80, step=5,
+     tooltip="El histograma debe haber bajado al menos este % del rango absoluto reciente antes de girar. Filtra giros superficiales cerca del cero.",
+     group="Señales Buy")
+
+// ── SEÑALES DE VENTA ─────────────────────────────────────────
+sell_active        = input.bool(true,  "Activar señales de VENTA",
+     tooltip="Habilita la detección y marcado de señales de entrada corta.",
+     group="Señales Sell")
+sell_rsi_lookback  = input.int(6,      "RSI · Lookback (velas)",
+     minval=2, maxval=20,
+     tooltip="Cuántas velas hacia atrás buscar si el RSI tocó sobrecompra. Un valor mayor captura reversiones más tardías.",
+     group="Señales Sell")
+sell_rsi_level     = input.float(65,   "RSI · Nivel sobrecompra",
+     minval=55, maxval=85,
+     tooltip="El RSI debe haber subido sobre este nivel dentro del lookback. Bajar el valor hace la condición más fácil de cumplir.",
+     group="Señales Sell")
+sell_adx_slope_len = input.int(3,      "ADX · Pendiente (velas atrás)",
+     minval=1, maxval=50,
+     tooltip="Compara el ADX actual con el de N velas atrás. Si subió, hay fuerza entrando al movimiento bajista.",
+     group="Señales Sell")
+sell_macd_confirm  = input.int(2,      "MACD · Velas giro confirmación",
+     minval=1, maxval=20,
+     tooltip="Número de velas consecutivas que el histograma del MACD debe bajar para confirmar el giro bajista.",
+     group="Señales Sell")
+sell_macd_depth    = input.float(20,   "MACD · Profundidad mínima (%)",
+     minval=5, maxval=80, step=5,
+     tooltip="El histograma debe haber subido al menos este % del rango absoluto reciente antes de girar. Filtra giros superficiales cerca del cero.",
+     group="Señales Sell")
+
+// ── GEOMETRÍA DE SLOTS ───────────────────────────────────────
+float S1_LO = 0.0    // MACD
+float S1_HI = 100.0
+float S2_LO = 115.0  // RSI
+float S2_HI = 215.0
+float S3_LO = 230.0  // ADX
+float S3_HI = 330.0
+float PAD   = 6.0    // margen interno por slot (evita que toque el borde)
+
+// ── FUNCIÓN DE NORMALIZACIÓN ─────────────────────────────────
+// Mapea v desde [src_lo, src_hi]  →  [dst_lo, dst_hi]
+norm(v, src_lo, src_hi, dst_lo, dst_hi) =>
+    rng = src_hi - src_lo
+    rng == 0.0 ? (dst_lo + dst_hi) / 2.0 : dst_lo + (v - src_lo) / rng * (dst_hi - dst_lo)
+
+mix_color(c1, c2, t) =>
+    tt = math.max(0.0, math.min(t, 1.0))
+    rr = int(math.round(color.r(c1) + (color.r(c2) - color.r(c1)) * tt))
+    gg = int(math.round(color.g(c1) + (color.g(c2) - color.g(c1)) * tt))
+    bb = int(math.round(color.b(c1) + (color.b(c2) - color.b(c1)) * tt))
+    color.rgb(rr, gg, bb)
+
+heat_color_pct(pct) =>
+    p = math.max(0.0, math.min(pct, 100.0))
+    c_green = color.rgb(0, 200, 83)      // 0-15
+    c_orange = color.rgb(255, 152, 0)    // 20-40
+    c_light = color.rgb(236, 239, 241)   // ~50
+    c_orange_red = color.rgb(255, 112, 67) // 60-80
+    c_red = color.rgb(213, 0, 0)         // 85-100
+    p <= 15.0 ? c_green :
+     p <= 40.0 ? mix_color(c_green, c_orange, (p - 15.0) / 25.0) :
+     p <= 50.0 ? mix_color(c_orange, c_light, (p - 40.0) / 10.0) :
+     p <= 80.0 ? mix_color(c_light, c_orange_red, (p - 50.0) / 30.0) :
+     p <= 85.0 ? mix_color(c_orange_red, c_red, (p - 80.0) / 5.0) :
+     c_red
+
+// ── CÁLCULOS ─────────────────────────────────────────────────
+
+// · RSI  (ya es 0-100 → mapeo directo con padding)
+rsi_val  = ta.rsi(rsi_src, rsi_len)
+rsi_plot = norm(rsi_val, 0.0, 100.0, S2_LO + PAD, S2_HI - PAD)
+
+// · ADX + DI
+[diplus_raw, diminus_raw, adx_raw] = ta.dmi(adx_len, adx_smooth)
+// Usamos el máximo reciente de los tres para escalar los tres juntos
+adx_peak     = ta.highest(math.max(adx_raw, math.max(diplus_raw, diminus_raw)), norm_len)
+adx_peak_use = math.max(adx_peak, 30.0)   // mínimo útil para evitar zoom excesivo en rangos bajos
+adx_plot     = norm(adx_raw,     0.0, adx_peak_use, S3_LO + PAD, S3_HI - PAD)
+diplus_plot  = norm(diplus_raw,  0.0, adx_peak_use, S3_LO + PAD, S3_HI - PAD)
+diminus_plot = norm(diminus_raw, 0.0, adx_peak_use, S3_LO + PAD, S3_HI - PAD)
+
+// · MACD — normalización simétrica dinámica
+[macd_line, signal_line, hist] = ta.macd(close, macd_fast, macd_slow, macd_sig)
+// Buscamos el pico absoluto entre línea, señal e histograma
+macd_abs_peak = ta.highest(
+     math.max(math.abs(macd_line), math.max(math.abs(signal_line), math.abs(hist))),
+     norm_len)
+macd_abs_peak := math.max(macd_abs_peak, 0.00001)  // evitar div/0
+
+// Rango simétrico: [-peak, +peak]
+macd_plot   = norm(macd_line,   -macd_abs_peak, macd_abs_peak, S1_LO + PAD, S1_HI - PAD)
+signal_plot = norm(signal_line, -macd_abs_peak, macd_abs_peak, S1_LO + PAD, S1_HI - PAD)
+hist_plot   = norm(hist,        -macd_abs_peak, macd_abs_peak, S1_LO + PAD, S1_HI - PAD)
+zero_line   = norm(0.0,         -macd_abs_peak, macd_abs_peak, S1_LO + PAD, S1_HI - PAD)
+
+// ── DETECCIÓN DE SEÑAL DE COMPRA ─────────────────────────────
+
+// 1) RSI estuvo en sobreventa dentro de las últimas N velas
+rsi_was_oversold = ta.lowest(rsi_val, buy_rsi_lookback) <= buy_rsi_level
+
+// 2) Histograma MACD sube N velas consecutivas y estuvo suficientemente negativo
+buy_hist_rising = true
+for i = 0 to buy_macd_confirm - 1
+    if hist[i] <= hist[i + 1]
+        buy_hist_rising := false
+buy_hist_min   = ta.lowest(hist, buy_rsi_lookback)
+buy_depth_req  = -macd_abs_peak * (buy_macd_depth / 100.0)
+macd_turning_up = buy_hist_rising and buy_hist_min <= buy_depth_req
+
+// 3) DI+ debajo de DI- (mercado en debilidad) Y ADX subiendo
+buy_adx_rising = adx_raw > adx_raw[buy_adx_slope_len]
+diplus_weak    = diplus_raw < diminus_raw
+
+buy_signal_raw = rsi_was_oversold and macd_turning_up and diplus_weak and buy_adx_rising
+
+var int bars_since_buy = 100
+bars_since_buy := buy_signal_raw and bars_since_buy >= 8 ? 0 : bars_since_buy + 1
+buy_signal = buy_active and barstate.isconfirmed and bars_since_buy == 0
+
+// Marcas visuales en cada slot
+plotshape(buy_signal ? S1_LO + 2 : na, "Buy · MACD", style=shape.circle, location=location.absolute, color=color.new(color.lime, 0), size=size.tiny)
+plotshape(buy_signal ? S2_LO + 2 : na, "Buy · RSI",  style=shape.circle, location=location.absolute, color=color.new(color.lime, 0), size=size.tiny)
+plotshape(buy_signal ? S3_LO + 2 : na, "Buy · ADX",  style=shape.circle, location=location.absolute, color=color.new(color.lime, 0), size=size.tiny)
+
+barcolor(buy_signal ? color.new(#00E676, 0) : na, title="Vela Buy")
+bgcolor(buy_signal ? color.new(color.lime, 85) : na, title="Buy BG")
+alertcondition(buy_signal, title="Buy Signal", message="Señal de compra en {{ticker}} ({{interval}}): RSI sobreventa + MACD girando + ADX subiendo")
+
+// ── DETECCIÓN DE SEÑAL DE VENTA ──────────────────────────────
+
+// 1) RSI estuvo en sobrecompra dentro de las últimas N velas
+rsi_was_overbought = ta.highest(rsi_val, sell_rsi_lookback) >= sell_rsi_level
+
+// 2) Histograma MACD baja N velas consecutivas y estuvo suficientemente positivo
+sell_hist_falling = true
+for i = 0 to sell_macd_confirm - 1
+    if hist[i] >= hist[i + 1]
+        sell_hist_falling := false
+sell_hist_max  = ta.highest(hist, sell_rsi_lookback)
+sell_depth_req = macd_abs_peak * (sell_macd_depth / 100.0)
+macd_turning_down = sell_hist_falling and sell_hist_max >= sell_depth_req
+
+// 3) DI- debajo de DI+ (mercado en fortaleza alcista) Y ADX subiendo
+sell_adx_rising = adx_raw > adx_raw[sell_adx_slope_len]
+diminus_weak    = diminus_raw < diplus_raw
+
+sell_signal_raw = rsi_was_overbought and macd_turning_down and diminus_weak and sell_adx_rising
+
+var int bars_since_sell = 100
+bars_since_sell := sell_signal_raw and bars_since_sell >= 8 ? 0 : bars_since_sell + 1
+sell_signal = sell_active and barstate.isconfirmed and bars_since_sell == 0
+
+// Marcas visuales en cada slot
+plotshape(sell_signal ? S1_HI - 2 : na, "Sell · MACD", style=shape.circle, location=location.absolute, color=color.new(color.red, 0), size=size.tiny)
+plotshape(sell_signal ? S2_HI - 2 : na, "Sell · RSI",  style=shape.circle, location=location.absolute, color=color.new(color.red, 0), size=size.tiny)
+plotshape(sell_signal ? S3_HI - 2 : na, "Sell · ADX",  style=shape.circle, location=location.absolute, color=color.new(color.red, 0), size=size.tiny)
+
+barcolor(sell_signal ? color.new(#FF1744, 0) : na, title="Vela Sell")
+bgcolor(sell_signal ? color.new(color.red, 85) : na, title="Sell BG")
+alertcondition(sell_signal, title="Sell Signal", message="Señal de venta en {{ticker}} ({{interval}}): RSI sobrecompra + MACD girando + ADX subiendo")
+
+// ── LÍNEAS DE REFERENCIA FIJAS ────────────────────────────────
+
+// Separadores de slots
+hline(S1_HI + (S2_LO - S1_HI) / 2.0, "", color=color.new(color.gray, 30), linestyle=hline.style_solid, linewidth=2)
+hline(S2_HI + (S3_LO - S2_HI) / 2.0, "", color=color.new(color.gray, 30), linestyle=hline.style_solid, linewidth=2)
+
+// MACD: línea cero (dinámica — se calcula arriba como zero_line)
+// RSI: 30 / 50 / 70
+hline(norm(30.0,  0.0, 100.0, S2_LO + PAD, S2_HI - PAD), "RSI 30", color=color.new(color.lime,  55), linestyle=hline.style_dotted)
+hline(norm(50.0,  0.0, 100.0, S2_LO + PAD, S2_HI - PAD), "RSI 50", color=color.new(color.white, 65), linestyle=hline.style_dotted)
+hline(norm(70.0,  0.0, 100.0, S2_LO + PAD, S2_HI - PAD), "RSI 70", color=color.new(color.red,   55), linestyle=hline.style_dotted)
+
+// ADX: nivel 25
+hline(norm(25.0, 0.0, 100.0, S3_LO + PAD, S3_HI - PAD), "ADX 25", color=color.new(color.yellow, 55), linestyle=hline.style_dotted)
+
+// ── PLOTS ─────────────────────────────────────────────────────
+
+// · SLOT 1 – MACD
+// Histograma: área entre hist_plot y zero_line
+p_hist = plot(hist_plot, "MACD Hist",   color=na, display=display.none)
+p_zero = plot(zero_line, "MACD Zero",   color=color.new(color.white, 75), linewidth=1)
+fill(p_hist, p_zero,
+     color = hist >= 0
+       ? color.new(#26a69a, 25)
+       : color.new(#ef5350, 25))
+
+plot(macd_plot,   "MACD Line",   color=color.new(#2962FF, 0), linewidth=2)
+plot(signal_plot, "MACD Signal", color=color.new(#FF6D00, 0), linewidth=1)
+
+// · SLOT 2 – RSI
+plot(rsi_plot, "RSI", color=rsi_color, linewidth=2)
+
+// · SLOT 3 – ADX + DI
+plot(adx_plot,     "ADX",  color=adx_color, linewidth=2)
+plot(diplus_plot,  "DI+",  color=color.new(#26a69a, 0), linewidth=1)
+plot(diminus_plot, "DI-",  color=color.new(#ef5350, 0), linewidth=1)
+
+// ── ETIQUETAS ESTÁTICAS DE SLOT ───────────────────────────────
+// (se dibujan como barLine en el primer bar para identificar cada franja)
+var line ln_lbl1 = line.new(bar_index, S1_LO, bar_index, S1_LO, color=na)
+var line ln_lbl2 = line.new(bar_index, S2_LO, bar_index, S2_LO, color=na)
+var line ln_lbl3 = line.new(bar_index, S3_LO, bar_index, S3_LO, color=na)
+
+// ── TABLA DE RESUMEN ──────────────────────────────────────────
+rsi_name_clr = rsi_color
+adx_name_clr = adx_color
+hist_name_clr = hist >= 0 ? color.new(#26a69a, 0) : color.new(#ef5350, 0)
+di_plus_name_clr  = color.new(#26a69a, 30)
+di_minus_name_clr = color.new(#ef5350, 30)
+macd_line_name_clr = color.new(#2962FF, 30)
+macd_sig_name_clr  = color.new(#FF6D00, 30)
+
+rsi_pct = math.max(0.0, math.min(rsi_val, 100.0))
+adx_pct = math.max(0.0, math.min(adx_raw, 100.0))
+di_plus_pct = math.max(0.0, math.min(diplus_raw, 100.0))
+di_minus_pct = math.max(0.0, math.min(diminus_raw, 100.0))
+hist_pct = math.max(0.0, math.min(norm(hist, -macd_abs_peak, macd_abs_peak, 0.0, 100.0), 100.0))
+macd_line_pct = math.max(0.0, math.min(norm(macd_line, -macd_abs_peak, macd_abs_peak, 0.0, 100.0), 100.0))
+macd_sig_pct = math.max(0.0, math.min(norm(signal_line, -macd_abs_peak, macd_abs_peak, 0.0, 100.0), 100.0))
+
+rsi_val_clr = heat_color_pct(rsi_pct)
+adx_val_clr = color.white
+// DI+ normal para tabla: bajo => verde, alto => rojo.
+// DI- se mantiene invertido: bajo => rojo, alto => verde.
+di_plus_val_clr = heat_color_pct(di_plus_pct)
+di_minus_val_clr = heat_color_pct(100.0 - di_minus_pct)
+hist_val_clr = color.white
+macd_line_val_clr = heat_color_pct(macd_line_pct)
+macd_sig_val_clr = heat_color_pct(macd_sig_pct)
+
+var table t = na
+if show_table
+    if na(t)
+        t := table.new(table_pos, 2, 8,
+             bgcolor=table_bg_color,
+             border_color=table_border_color, border_width=1,
+             frame_color=table_frame_color, frame_width=1)
+    else
+        table.set_position(t, table_pos)
+
+    table.cell(t, 0, 0, "Indicador", text_color=color.white,  text_size=size.small, text_halign=text.align_left)
+    table.cell(t, 1, 0, "Valor",     text_color=color.white,  text_size=size.small, text_halign=text.align_right)
+    // Orden visual de arriba a abajo del panel: ADX (arriba), RSI (medio), MACD (abajo).
+    table.cell(t, 0, 1, "ADX",       text_color=adx_name_clr,     text_size=size.normal, text_halign=text.align_left)
+    table.cell(t, 1, 1, str.tostring(adx_raw, "#.##"), text_color=adx_val_clr, text_size=size.normal, text_halign=text.align_right)
+    // Valores DI+ / DI- sutiles debajo de ADX.
+    table.cell(t, 0, 2, "DI+",       text_color=di_plus_name_clr, text_size=size.tiny, text_halign=text.align_left)
+    table.cell(t, 1, 2, str.tostring(diplus_raw, "#.##"), text_color=di_plus_val_clr, text_size=size.tiny, text_halign=text.align_right)
+    table.cell(t, 0, 3, "DI-",       text_color=di_minus_name_clr, text_size=size.tiny, text_halign=text.align_left)
+    table.cell(t, 1, 3, str.tostring(diminus_raw, "#.##"), text_color=di_minus_val_clr, text_size=size.tiny, text_halign=text.align_right)
+    table.cell(t, 0, 4, "RSI",       text_color=rsi_name_clr,     text_size=size.normal, text_halign=text.align_left)
+    table.cell(t, 1, 4, str.tostring(rsi_val, "#.##"), text_color=rsi_val_clr, text_size=size.normal, text_halign=text.align_right)
+    table.cell(t, 0, 5, "MACD Hist", text_color=hist_name_clr,    text_size=size.normal, text_halign=text.align_left)
+    table.cell(t, 1, 5, str.tostring(hist, "#.####"),  text_color=hist_val_clr, text_size=size.normal, text_halign=text.align_right)
+    // Valores sutiles de las líneas MACD / Señal debajo del histograma.
+    table.cell(t, 0, 6, "MACD",      text_color=macd_line_name_clr, text_size=size.tiny, text_halign=text.align_left)
+    table.cell(t, 1, 6, str.tostring(macd_line, "#.####"), text_color=macd_line_val_clr, text_size=size.tiny, text_halign=text.align_right)
+    table.cell(t, 0, 7, "Señal",     text_color=macd_sig_name_clr, text_size=size.tiny, text_halign=text.align_left)
+    table.cell(t, 1, 7, str.tostring(signal_line, "#.####"), text_color=macd_sig_val_clr, text_size=size.tiny, text_halign=text.align_right)
+else
+    if not na(t)
+        table.delete(t)
+        t := na
