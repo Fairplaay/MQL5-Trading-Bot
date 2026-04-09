@@ -66,7 +66,7 @@ string  baseSymbolUsed;
 
 int tradesToday = 0;
 datetime lastTradeTime = 0;
-datetime lastTradeDay = 0;
+int lastTradeDay = 0;
 
 //==================================================================
 // INIT
