@@ -57,11 +57,14 @@ def prepare_features(df):
     """Prepara features para el modelo."""
     df = calculate_indicators(df)
     
+    # Normalizar todas las columnas a mayúsculas
+    df.columns = df.columns.str.upper()
+    
     # Features
     features = [
-        'Open', 'High', 'Low', 'Close', 'Volume',
+        'OPEN', 'HIGH', 'LOW', 'CLOSE', 'VOLUME',
         'RSI', 'EMA_9', 'EMA_21', 'ATR',
-        'MACD', 'MACD_Signal', 'BB_Upper', 'BB_Lower'
+        'MACD', 'MACD_SIGNAL', 'BB_MID', 'BB_UPPER', 'BB_LOWER'
     ]
     
     # Eliminar NaN
@@ -152,14 +155,18 @@ def load_m1_data(csv_file: str) -> pd.DataFrame:
     """Carga data M1 del CSV exportado."""
     df = pd.read_csv(csv_file, sep="	", encoding="utf-16")
     
-    print("Columnas disponibles:", df.columns.tolist()); print("Columnas:", df.columns.tolist()); required = ["Time", "Open", "High", "Low", "Close", "Volume"]
+    # Normalizar columnas a mayúsculas
+    df.columns = df.columns.str.upper()
+    
+    print("Columnas normalizadas:", df.columns.tolist())
+    required = ["TIME", "OPEN", "HIGH", "LOW", "CLOSE", "VOLUME"]
     for col in required:
         if col not in df.columns:
             raise ValueError(f"Falta columna: {col}")
     
-    # Crear Time
-    df["Time"] = pd.to_datetime(df["Time"], format="%Y.%m.%d %H:%M:%S")
-    df.sort_values("Time", inplace=True)
+    # Crear TIME
+    df["TIME"] = pd.to_datetime(df["TIME"], format="%Y.%m.%d %H:%M:%S")
+    df.sort_values("TIME", inplace=True)
     df.reset_index(drop=True, inplace=True)
     
     return df
