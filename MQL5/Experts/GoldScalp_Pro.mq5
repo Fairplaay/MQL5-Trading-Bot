@@ -60,7 +60,7 @@ input int      MaxSpreadPoints    = 40;
 //==================================================================
 // GLOBALES
 //==================================================================
-int hRSI, hMACD, hATR;
+int hRSI, hMACD;
 datetime lastBarTime;
 string  baseSymbolUsed;
 
@@ -83,9 +83,8 @@ int OnInit()
    // Indicadores
    hRSI  = iRSI(baseSymbolUsed, MainTF, InpRSI_Period, PRICE_CLOSE);
    hMACD = iMACD(baseSymbolUsed, MainTF, InpMACD_Fast, InpMACD_Slow, InpMACD_Sig, PRICE_CLOSE);
-   hATR  = iATR(baseSymbolUsed, MainTF, 14);
    
-   if(hRSI == INVALID_HANDLE || hMACD == INVALID_HANDLE || hATR == INVALID_HANDLE)
+   if(hRSI == INVALID_HANDLE || hMACD == INVALID_HANDLE)
      {
       Print("Error: No se cargaron indicadores");
       return(INIT_FAILED);
@@ -172,12 +171,11 @@ void OnTick()
 //==================================================================
 bool CheckSignal(bool &buySignal, bool &sellSignal, double &buySL, double &buyTP, double &sellSL, double &sellTP)
 {
-   double rsi[], macd[], macdSig[], atr[];
+   double rsi[], macd[], macdSig[];
    
    if(CopyBuffer(hRSI, 0, 0, 20, rsi) < 20) return false;
    if(CopyBuffer(hMACD, 0, 0, 20, macd) < 20) return false;
    if(CopyBuffer(hMACD, 1, 0, 20, macdSig) < 20) return false;
-   if(CopyBuffer(hATR, 0, 0, 1, atr) < 1) return false;
 
    ArraySetAsSeries(rsi, true);
    ArraySetAsSeries(macd, true);
