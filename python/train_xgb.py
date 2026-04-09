@@ -118,7 +118,7 @@ def train_xgboost_model(csv_path, version='v2'):
     
     # Cargar datos
     print(f"\n[1] Cargando datos: {csv_path}")
-    df = pd.read_csv(csv_path)
+    # Detectar encoding (UTF-16 tiene BOM)\n    try:\n        df = pd.read_csv(csv_path, encoding='utf-8')\n    except UnicodeDecodeError:\n        df = pd.read_csv(csv_path, encoding='utf-16')
     
     # Columnas standard
     df.columns = [c.lower() for c in df.columns]
