@@ -66,6 +66,7 @@ string  baseSymbolUsed;
 
 int tradesToday = 0;
 datetime lastTradeTime = 0;
+datetime lastResetTime = 0;
 
 //==================================================================
 // INIT
@@ -108,14 +109,13 @@ void OnTick()
    if(curBarTime == lastBarTime) return;
    lastBarTime = curBarTime;
    
-   // Reset daily by time (midnight)
-   MqlDateTime dt, dtLast;
-   TimeToStruct(TimeCurrent(), dt);
-   TimeToStruct(lastTradeTime, dtLast);
+   // Reset daily at midnight
+   datetime now = TimeCurrent();
    
-   if(dt.day_of_month != dtLast.day_of_month)
+   if(now >= lastResetTime + 24*3600)
      {
       tradesToday = 0;
+      lastResetTime = now;
      }
    
    // Check limits
