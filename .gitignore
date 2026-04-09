@@ -7,7 +7,7 @@ __pycache__/
 *.pyc
 
 # Ignore data CSVs or large datasets
-# *.csv
+*.csv
 *.xlsx
 *.json
 
