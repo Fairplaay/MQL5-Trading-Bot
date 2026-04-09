@@ -15,21 +15,21 @@ CTrade  trade;
 //==================================================================
 // INPUTS - FASE 1: PARAMETROS SL/TP DINAMICOS
 //==================================================================
-input double   InpATR_Mult_SL   = 1.5;         // SL: 1.5 x ATR
-input double   InpATR_Mult_TP  = 3.0;         // TP: 3.0 x ATR (RR 2:1)
+input double   InpATR_Mult_SL   = 2.0;         // SL: 2.0 x ATR (mas amplio)
+input double   InpATR_Mult_TP  = 4.0;         // TP: 4.0 x ATR (RR 2:1)
 input int      InpATR_Period   = 14;          // Periodo ATR
 
 //==================================================================
 // INPUTS - INDICADORES MOMENTUM (FASE 2)
 //==================================================================
 input int      InpRSI_Len     = 14;
-input double   InpBuyRSI_Lvl  = 30.0;        // FASE 2: was 35
-input double   InpSellRSI_Lvl = 70.0;        // FASE 2: was 65
+input double   InpBuyRSI_Lvl  = 35.0;        // RSI Buy (menos estricto)
+input double   InpSellRSI_Lvl = 65.0;        // RSI Sell
 input int      InpRSI_Lookbk  = 6;
 
 input int      InpADX_Len     = 14;
 input int      InpADX_Slope   = 3;
-input int     InpMinADX     = 20;           // FASE 1: ADX minimo
+input int     InpMinADX     = 15;           // ADX minimo (relajado)
 
 input int      InpMACD_Fast  = 12;
 input int      InpMACD_Slow  = 26;
@@ -37,14 +37,14 @@ input int      InpMACD_Sig   = 9;
 input int      InpNorm_Len   = 100;
 input double   InpMACD_Depth = 20.0;
 
-input int      InpCooldown    = 15;           // FASE 2: was 8 -> 15
+input int      InpCooldown    = 10;           // Cooldown bars (relajado)
 
 //==================================================================
 // INPUTS - TREND FILTER (FASE 1)
 //==================================================================
-input bool    UseTrendFilter = true;        // Filtro EMA200
+input bool    UseTrendFilter = false;       // Filtro EMA200 (desactivado por ahora)
 input int     InpEMAPeriod   = 200;         // EMA200 para tendencia
-input bool    UseADXFilter  = true;        // Filtro ADX
+input bool    UseADXFilter  = false;       // Filtro ADX (desactivado)
 
 //==================================================================
 // INPUTS - TRADING
@@ -110,7 +110,7 @@ int OnInit()
    Print("=== MOMENTUM X3 V2 INIT ===");
    Print("Symbol: ", baseSymbolUsed);
    Print("SL: ", InpATR_Mult_SL, " x ATR | TP: ", InpATR_Mult_TP, " x ATR");
-   Print("Trend Filter: EMA", InpEMAPeriod, " | ADX Min: ", InpMinADX);
+   Print("Trend Filter: ", UseTrendFilter ? "ON" : "OFF", " | ADX Filter: ", UseADXFilter ? "ON" : "OFF");
    Print("Cooldown: ", InpCooldown, " bars");
    Print("=============================");
    
